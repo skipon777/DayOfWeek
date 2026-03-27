@@ -1,6 +1,7 @@
 # 曜日表示のみ (Pine Script v5)
 
 TradingViewチャート上で、曜日ラベルを下部に表示し、日付の切り替わりで縦の区切り線を描画するインジケーターです。
+https://jp.tradingview.com/script/qfTMhv64/
 
 ## 概要
 
