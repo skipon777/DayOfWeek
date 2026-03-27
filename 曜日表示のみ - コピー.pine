@@ -1,0 +1,310 @@
+//
+//  ==============================================
+//  説明:       曜日画面下部に表示
+//  作成日:     2023/11/13
+//  作成者:     skipon
+//  バージョン: V1.00
+//  対応バージョン: TradingView Pine Script V5
+//  ==============================================
+// 
+
+//@version=5
+indicator(title='KM_曜日表示',
+      shorttitle='KM_曜日表示',
+      overlay=true
+
+
+// -------------------- INPUTS --------------------
+
+MSG = input.bool(false, title='NOTE: To avoid chart shrinkage, right click on your price scale then select "scale to price chart only"')
+var GRP0 = "=============== INITIALIZE ==============="
+hoursOffsetInput = input.string('-4', "Timezone offset (GMT)", group=GRP0, tooltip="Enter your time zone's offset (+ or -). Eg. +5 / -3 / +9:30")
+newDayHr = input.int(17, title='Day starts at what hour?', minval=0, maxval=23, group=GRP0)
+autoDay = input.bool(true, title='Ignore above hour and use exchange day start hour', group=GRP0, tooltip="This comes in handy when looking at different asset classes. Ie, for Forex the daily close is at 1700 (GMT-4), but for cryptos, some exhanges are at 0800 and some are at 0000")
+
+// --- CONSTANTS ---
+TIMEZONE = "GMT"+hoursOffsetInput
+ISNEWDAY = dayofweek != dayofweek[1]
+TRANSPARENT = color.new(color.white, 100)
+exchangeOffset = hour(timenow, TIMEZONE) - hour(timenow, syminfo.timezone)
+HOUR = hour + exchangeOffset <= 23 ? hour + exchangeOffset : (hour + exchangeOffset) - 24
+// --- CONSTANTS ---
+
+var grp1 = '-------------------- Sessions --------------------'
+session1Text = input.string('London Open', title='', inline='1', group=grp1)
+session1Time = input.session(title='', defval='0200-0400', inline='1', group=grp1)
+session1Color = input.color(color.new(color.blue, 0), title='', inline='1', group=grp1)
+session1Show = input.bool(true, title='', inline='1', group=grp1)
+
+session2Text = input.string('NY Open', title='', inline='2', group=grp1)
+session2Time = input.session(title='', defval='0700-0900', inline='2', group=grp1)
+session2Color = input.color(color.new(color.red, 0), title='', inline='2', group=grp1)
+session2Show = input.bool(true, title='', inline='2', group=grp1)
+
+session3Text = input.string('London Close', title='', inline='3', group=grp1)
+session3Time = input.session(title='', defval='1000-1100', inline='3', group=grp1)
+session3Color = input.color(color.new(color.lime, 0), title='', inline='3', group=grp1)
+session3Show = input.bool(true, title='', inline='3', group=grp1)
+
+session4Text = input.string('Tokyo', title='', inline='4', group=grp1)
+session4Time = input.session(title='', defval='1900-2000', inline='4', group=grp1)
+session4Color = input.color(color.new(color.white, 0), title='', inline='4', group=grp1)
+session4Show = input.bool(false, title='', inline='4', group=grp1)
+
+bgType = input.string(title='Type', defval='Line', options=['Background', 'Line'], inline='5', group=grp1, tooltip="If you change to background, make sure you decrease the color transparency above")
+linePosition = input.string(title='Lines Position', defval='Top', options=['Top', 'Bottom'], inline='5', group=grp1)
+
+var grp2 = "-------------------- Table UI --------------------"
+showTable = input.bool(true, title='Show Sessions Table', inline='1', group=grp2)
+showNextSession = input.bool(true, title='Show Next Session', inline='1', group=grp2)
+theme = input.string(title='Theme Mode', defval='Dark', options=['Dark', 'Light'], inline='2', group = grp2)
+position = input.string(title='Table Position', defval='Top Right', options=['Top Right', 'Bottom Right', 'Top Left', 'Bottom Left'], inline='2', group = grp2)
+alignment = input.string(title='Alignment', defval='Horizontal', options=['Vertical', 'Horizontal'], inline='3', group = grp2)
+noSessionText = input.string('Outside Hours', title='Outside Session Text', inline='3', group=grp2)
+
+var grp3 = "-------------------- Daily Dividers --------------------"
+showDailyDividers = input(title='Show Daily Dividers ?', defval=true, inline='1', group=grp3)
+showDOW = input(true, title='Show days of week', inline='1', group=grp3)
+divider_text_color = input(color.blue, 'Divider and Text Color', group=grp3)
+dayLabelOffset = input.int(4, title='Days label offset', minval=1, maxval=15, group=grp3)
+// -------------------- INPUTS --------------------
+
+
+// -------------------- FUNCTIONS --------------------
+_color1 = theme == "Dark" ? color.white : color.black
+
+vline(BarIndex, Color, LineStyle, LineWidth) =>
+    LineLengthMult = 10
+    LineLength = ta.atr(100) * 100
+    line.new(BarIndex, low-LineLength, BarIndex, high+LineLength, extend=extend.both, color=Color, style=LineStyle, width=LineWidth)
+    // return_1 = line.new(BarIndex, low - ta.tr, BarIndex, high + ta.tr, xloc.bar_index, extend=extend.both, color=Color, style=LineStyle, width=LineWidth)
+    // return_1
+
+timeTillPeriodEnd(sess, _type = 1) =>
+    sessionEnd = array.get(str.split(sess, '-'), _type)
+    int endHour = math.round(str.tonumber(str.substring(sessionEnd, 0, 2)))
+    int endMinute = math.round(str.tonumber(str.substring(sessionEnd, 2, 4)))
+    tsNow = timestamp(TIMEZONE, year(time, TIMEZONE), month(time, TIMEZONE), dayofmonth(time, TIMEZONE), hour(time, TIMEZONE), minute(time, TIMEZONE))
+    tsEnd = timestamp(TIMEZONE, year(time, TIMEZONE), month(time, TIMEZONE), dayofmonth(time, TIMEZONE), endHour, endMinute)
+    timeRemaining = tsEnd - tsNow < 0 ? math.round(((tsEnd+86400000) - tsNow) / 1000) : math.round((tsEnd - tsNow) / 1000)
+    
+    days = math.floor(timeRemaining / 86400)
+    hours = math.floor((timeRemaining % 86400) / 3600)
+    minutes = math.floor((timeRemaining % 3600) / 60)
+    seconds = timeRemaining % 60
+    [hours, minutes, seconds]
+
+resolutionInMinutes() =>
+    resInMinutes = timeframe.multiplier * (timeframe.isseconds ? 1. / 60 : timeframe.isminutes ? 1. : timeframe.isdaily ? 60. * 24 : timeframe.isweekly ? 60. * 24 * 7 : timeframe.ismonthly ? 60. * 24 * 30.4375 : na)
+    int(resInMinutes)
+// -------------------- FUNCTIONS --------------------
+
+
+// -------------------- SESSIONS --------------------
+sess1 = session1Show ? time(timeframe.period, session1Time, TIMEZONE) : na
+sess2 = session2Show ? time(timeframe.period, session2Time, TIMEZONE) : na
+sess3 = session3Show ? time(timeframe.period, session3Time, TIMEZONE) : na
+sess4 = session4Show ? time(timeframe.period, session4Time, TIMEZONE) : na
+// -------------------- SESSIONS --------------------
+
+
+// -------------------- PLOT --------------------
+bgcolor(not na(sess1) and bgType == 'Background' and timeframe.isintraday == true ? session1Color : na, title='Session 1')
+bgcolor(not na(sess2) and bgType == 'Background' and timeframe.isintraday == true ? session2Color : na, title='Session 2')
+bgcolor(not na(sess3) and bgType == 'Background' and timeframe.isintraday == true ? session3Color : na, title='Session 3')
+bgcolor(not na(sess4) and bgType == 'Background' and timeframe.isintraday == true ? session4Color : na, title='Session 4')
+
+_linPos = linePosition == 'Top' ? location.top : location.bottom
+plotshape(not na(sess1) and bgType == 'Line' and timeframe.isintraday == true, title='Session 1', style=shape.square, location=_linPos, color=session1Color, size=size.auto)
+plotshape(not na(sess2) and bgType == 'Line' and timeframe.isintraday == true, title='Session 2', style=shape.square, location=_linPos, color=session2Color, size=size.auto)
+plotshape(not na(sess3) and bgType == 'Line' and timeframe.isintraday == true, title='Session 3', style=shape.square, location=_linPos, color=session3Color, size=size.auto)
+plotshape(not na(sess4) and bgType == 'Line' and timeframe.isintraday == true, title='Session 4', style=shape.square, location=_linPos, color=session4Color, size=size.auto)
+// -------------------- PLOT --------------------
+
+
+// -------------------- SESSIONS LOGIC --------------------
+sessions_arr = array.new_string(0)
+
+if session1Show
+    array.push(sessions_arr, '1')
+if session2Show
+    array.push(sessions_arr, '2')
+if session3Show
+    array.push(sessions_arr, '3')
+if session4Show
+    array.push(sessions_arr, '4')
+
+
+_findSess(_i) =>
+    arr_size = array.size(sessions_arr) - 1
+    _index = array.indexof(sessions_arr, _i)
+    _next = _i
+    
+    if _index < arr_size
+        _next := array.get(sessions_arr, _index + 1)
+    else
+        _next := array.get(sessions_arr, 0)
+    _next
+
+_currentSess = noSessionText
+_currentSessCol = _color1
+var _nextSess = noSessionText
+var _nextSessCol = _color1
+var _ni = '0'
+
+end_hours = 0
+end_minutes = 0
+end_seconds = 0
+
+start_hours = 0
+start_minutes = 0
+start_seconds = 0
+
+// Current Sessions
+if(sess1)
+    _currentSess := session1Text
+    _currentSessCol := session1Color
+    _ni := _findSess('1')
+    [_h, _m, _s] = timeTillPeriodEnd(session1Time)
+    end_hours := _h
+    end_minutes := _m
+    end_seconds := _s
+else if(sess2)
+    _currentSess := session2Text
+    _currentSessCol := session2Color
+    _ni := _findSess('2')
+    [_h, _m, _s] = timeTillPeriodEnd(session2Time)
+    end_hours := _h
+    end_minutes := _m
+    end_seconds := _s
+else if(sess3)
+    _currentSess := session3Text
+    _currentSessCol := session3Color
+    _ni := _findSess('3')
+    [_h, _m, _s] = timeTillPeriodEnd(session3Time)
+    end_hours := _h
+    end_minutes := _m
+    end_seconds := _s
+else if(sess4)
+    _currentSess := session4Text
+    _currentSessCol := session4Color
+    _ni := _findSess('4')
+    [_h, _m, _s] = timeTillPeriodEnd(session4Time)
+    end_hours := _h
+    end_minutes := _m
+    end_seconds := _s
+else
+    _currentSess := noSessionText
+    _currentSessCol := _color1
+    end_hours := 0
+    end_minutes := 0
+    end_seconds := 0
+
+// Next Session
+if _ni == '1'
+    _nextSess := session1Text
+    _nextSessCol := session1Color
+    [_h, _m, _s] = timeTillPeriodEnd(session1Time, 0)
+    start_hours := _h
+    start_minutes := _m
+    start_seconds := _s
+else if _ni == '2'
+    _nextSess := session2Text
+    _nextSessCol := session2Color
+    [_h, _m, _s] = timeTillPeriodEnd(session2Time, 0)
+    start_hours := _h
+    start_minutes := _m
+    start_seconds := _s
+else if _ni == '3'
+    _nextSess := session3Text
+    _nextSessCol := session3Color
+    [_h, _m, _s] = timeTillPeriodEnd(session3Time, 0)
+    start_hours := _h
+    start_minutes := _m
+    start_seconds := _s
+else if _ni == '4'
+    _nextSess := session4Text
+    _nextSessCol := session4Color
+    [_h, _m, _s] = timeTillPeriodEnd(session4Time, 0)
+    start_hours := _h
+    start_minutes := _m
+    start_seconds := _s
+else
+    _nextSess := noSessionText
+    _nextSessCol := _color1
+    start_hours := 0
+    start_minutes := 0
+    start_seconds := 0
+
+// -------------------- SESSIONS LOGIC --------------------
+
+
+// -------------------- TABLE --------------------
+_position = switch position
+    "Top Left" => position.top_left
+    "Top Right" => position.top_right
+    "Bottom Left" => position.bottom_left
+    => position.bottom_right
+
+
+end_txt = str.tostring(end_hours) + "h " + str.tostring(end_minutes) + "m"
+start_txt = str.tostring(start_hours) + "h " + str.tostring(start_minutes) + "m"
+
+var table _table = table.new(_position, columns = 2, rows = 4, border_width=3)
+
+_vert = alignment == 'Vertical'
+
+if showTable
+    table.cell(_table, column = 0, row = 0, text = _currentSess, text_color=color.new(_currentSessCol, 0), bgcolor=color.new(_currentSessCol, 90))
+    table.cell(_table, column = _vert ? 0 : 1, row = _vert ? 1 : 0, text = end_txt, text_color=color.new(_currentSessCol, 0))
+    
+    if showNextSession
+        table.cell(_table, column = 0, row = 2, text = _nextSess, text_color=color.new(_nextSessCol, 0), bgcolor=color.new(_nextSessCol, 90))
+        table.cell(_table, column = _vert ? 0 : 1, row = _vert ? 3 : 2, text = start_txt, text_color=color.new(_nextSessCol, 0))
+// -------------------- TABLE --------------------
+
+
+// -------------------- DAILY DIVIDERS --------------------
+tickerExchangeOffset = 5
+int dayLabelStartTime = 1
+
+_rin = resolutionInMinutes()
+
+if syminfo.timezone == 'Etc/UTC'
+    dayLabelStartTime += tickerExchangeOffset
+    dayLabelStartTime
+
+isStartTime = autoDay ? ISNEWDAY : HOUR == newDayHr and HOUR[1] != newDayHr //and minute == 0 
+_inTimeframe = _rin <= 180 and timeframe.isintraday
+
+isMon() => _inTimeframe ? HOUR == dayLabelStartTime and minute == 0 and dayofweek == dayofweek.monday : false
+isTue() => _inTimeframe ? HOUR == dayLabelStartTime and minute == 0 and dayofweek == dayofweek.tuesday : false
+isWed() => _inTimeframe ? HOUR == dayLabelStartTime and minute == 0 and dayofweek == dayofweek.wednesday : false
+isThu() => _inTimeframe ? HOUR == dayLabelStartTime and minute == 0 and dayofweek == dayofweek.thursday : false
+isFri() => _inTimeframe ? HOUR == dayLabelStartTime and minute == 0 and dayofweek == dayofweek.friday : false
+isSat() => _inTimeframe ? HOUR == dayLabelStartTime and minute == 0 and dayofweek == dayofweek.saturday : false
+isSun() => _inTimeframe ? HOUR == dayLabelStartTime and minute == 0 and dayofweek == dayofweek.sunday : false
+
+if isStartTime and showDailyDividers
+    vline(bar_index, divider_text_color, line.style_dashed, 1)
+
+_offset = _rin <= 7 ? math.round(dayLabelOffset * 12) : _rin <= 14 ? math.round(dayLabelOffset * 6) : _rin <= 20 ? math.round(dayLabelOffset * 4) : _rin <= 30 ? math.round(dayLabelOffset * 2) : _rin <= 60 ? math.round(dayLabelOffset * 1) : math.round(dayLabelOffset * 0.2)
+
+txtMonH = "Monday"
+txtTueH = "Tuesday"
+txtWedH = "Wednesday"
+txtThuH = "Thursday"
+txtFriH = "Friday"
+txtSatH = "Saturday"
+txtSunH = "Sunday"
+
+// Days Label
+plotshape(showDOW and isMon(), text=txtMonH, color=TRANSPARENT, offset=_offset, style=shape.circle, location=location.bottom, textcolor=divider_text_color, size=size.tiny, editable=false)
+plotshape(showDOW and isTue(), text=txtTueH, color=TRANSPARENT, offset=_offset, style=shape.circle, location=location.bottom, textcolor=divider_text_color, size=size.tiny, editable=false)
+plotshape(showDOW and isWed(), text=txtWedH, color=TRANSPARENT, offset=_offset, style=shape.circle, location=location.bottom, textcolor=divider_text_color, size=size.tiny, editable=false)
+plotshape(showDOW and isThu(), text=txtThuH, color=TRANSPARENT, offset=_offset, style=shape.circle, location=location.bottom, textcolor=divider_text_color, size=size.tiny, editable=false)
+plotshape(showDOW and isFri(), text=txtFriH, color=TRANSPARENT, offset=_offset, style=shape.circle, location=location.bottom, textcolor=divider_text_color, size=size.tiny, editable=false)
+plotshape(showDOW and isSat(), text=txtSatH, color=TRANSPARENT, offset=_offset, style=shape.circle, location=location.bottom, textcolor=divider_text_color, size=size.tiny, editable=false)
+plotshape(showDOW and isSun(), text=txtSunH, color=TRANSPARENT, offset=_offset, style=shape.circle, location=location.bottom, textcolor=divider_text_color, size=size.tiny, editable=false)
+
+// -------------------- DAILY DIVIDERS --------------------
