@@ -1,11 +1,11 @@
 # 曜日表示のみ (Pine Script v5)
 
-TradingViewチャート上で、曜日ラベルを下部に表示し、日付の切り替わりで縦の区切り線を描画するインジケーターです。
+TradingViewチャート上で、曜日ラベルを下部に表示し、日付と月の切り替わりで縦の区切り線を描画するインジケーターです。
 https://jp.tradingview.com/script/qfTMhv64/
 
 ## 概要
 
-このスクリプトは次の2機能に特化しています。
+このスクリプトは次の3機能に特化しています。
 
 - 曜日ラベル表示
 	- `Monday` から `Sunday` をチャート下部に表示
@@ -13,6 +13,11 @@ https://jp.tradingview.com/script/qfTMhv64/
 - 日付区切りの縦線表示
 	- 日足の切り替わりタイミングで破線の縦線を描画
 	- `timeframe.change('D')` を利用
+	- 日足以上では非表示（インターデイのみ表示）
+- 月区切りの縦線表示
+	- 月足の切り替わりタイミングで破線の縦線を描画
+	- `timeframe.change('M')` を利用
+	- 日付区切り線より濃い色・太さで強調
 
 ## 対応条件
 
@@ -20,18 +25,25 @@ https://jp.tradingview.com/script/qfTMhv64/
 - オーバーレイ表示: `overlay=true`
 - 想定時間足: 180分足以下のインターデイ
 	- 曜日ラベル表示は `timeframe.isintraday` かつ `<= 180分` で有効
+	- 日付区切り線は `timeframe.isintraday` のときのみ有効
+	- 月区切り線は `timeframe.change('M')` で表示
 
 ## 現在の主要パラメータ (コード内固定)
 
 - タイムゾーン補正: `GMT-4`
 - 曜日判定の基準時刻: `01:00`
 - 曜日ラベル色: `blue`
+- 日付区切り線の色: `chartCss = color.new(chart.fg_color, 50)`
+- 月区切り線の色: `monthChartCss = color.new(chart.fg_color, 20)`
+- 月区切り線の太さ: `width = 2`
 
 必要に応じて、以下の変数を編集してください。
 
 - `Youbi_hoursOffsetInput`
 - `Youbi_dayLabelStartTime`
 - `Youbi_divider_text_color`
+- `chartCss`
+- `monthChartCss`
 
 ## 使い方
 
@@ -49,6 +61,7 @@ https://jp.tradingview.com/script/qfTMhv64/
 ## 更新履歴
 
 - 2026/03/27: 日付区切りの縦線を追加
+- 2026/03/28: 日足以上では日付区切り線を非表示化、月区切りの縦線を追加（濃色・太線）
 
 ---
 
@@ -58,15 +71,16 @@ https://jp.tradingview.com/script/qfTMhv64/
 
 ### タイトル案
 
-曜日表示のみ (Day Labels + Daily Divider)
+曜日表示のみ (Day Labels + Daily & Monthly Divider)
 
 ### 説明文案
 
-チャート下部に曜日ラベル (Monday-Sunday) を表示し、日付切り替わりに縦の破線を引くシンプルな補助インジケーターです。
+チャート下部に曜日ラベル (Monday-Sunday) を表示し、日付・月の切り替わりに縦の破線を引くシンプルな補助インジケーターです。
 
 - 180分足以下のインターデイで動作
 - 時間足に応じたラベル位置オフセット
-- 日足切り替わりを `timeframe.change('D')` で検出
+- 日足切り替わりを `timeframe.change('D')` で検出（インターデイのみ表示）
+- 月切り替わりを `timeframe.change('M')` で検出（濃色・太線で表示）
 
 現在は `GMT-4` を基準に調整しています。必要に応じてコード内のオフセット値を変更してください。
 

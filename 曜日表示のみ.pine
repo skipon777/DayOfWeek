@@ -2,7 +2,9 @@
 //@version=5
 indicator(title='曜日の表示2',shorttitle='曜日の表示2', overlay=true, precision = 2, max_boxes_count=500, max_labels_count=500, max_lines_count=500, max_bars_back=1500) //, timeframe="", timeframe_gaps=true
 
+// 2024/06/01 曜日表示のインジケーターを作成
 // 2026/03/27 日付区切りの縦線を追加
+// 2026/03/28 日足以上は曜日区切り線を非表示・月の区切り線を追加
 
 //////////////////////////////
 // 曜日の表示
@@ -81,6 +83,7 @@ method set_range(session_range id)=>
 //Variables
 //-----------------------------------------------------------------------------{
 var chartCss = color.new(chart.fg_color, 50)
+var monthChartCss = color.new(chart.fg_color, 20)
 
 var session_range sesr = na
 
@@ -90,9 +93,10 @@ var line avg = na
 //New session
 //-----------------------------------------------------------------------------{
 dtf = timeframe.change('D')
+mtf = timeframe.change('M')
 
 //On new session
-if dtf
+if dtf and timeframe.isintraday
     //Set delimiter
     line.new(n, high + syminfo.mintick
       , n, low - syminfo.mintick
@@ -102,6 +106,15 @@ if dtf
 
     //Set new range
     sesr := session_range.new(
-      line.new(n, high, n, high, color = chartCss)
-      , line.new(n, low, n, low, color = chartCss))
+         line.new(n, high, n, high, color = chartCss)
+         , line.new(n, low, n, low, color = chartCss))
+
+//On new month
+if mtf
+    line.new(n, high + syminfo.mintick
+         , n, low - syminfo.mintick
+         , color = monthChartCss
+         , style = line.style_dashed
+         , width = 2
+         , extend = extend.both)
 
